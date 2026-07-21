@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ULTRAPARKOUR — Stil İçin Öldür</title>
+<meta name="description" content="ULTRAKILL'den ilham alan hızlı tempolu 2D parkur-nişancı. Python & Pygame ile geliştiriliyor.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#07070a;
+    --bg-raised:#0e0e15;
+    --bg-card:#101018;
+    --line: rgba(255,255,255,.08);
+    --crimson:#ff2444;
+    --azure:#22e4ff;
+    --violet:#b93cff;
+    --toxic:#c6ff2e;
+    --solar:#ffcc22;
+    --text:#eceef5;
+    --muted:#8c8ca0;
+    --mono:'Share Tech Mono', monospace;
+    --disp:'Rajdhani', sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--disp);
+    font-weight:500;
+    overflow-x:hidden;
+    position:relative;
+  }
+  ::selection{background:var(--crimson);color:#000;}
+
+  /* scanline / crt overlay */
+  .scanlines{
+    pointer-events:none;
+    position:fixed; inset:0; z-index:9999;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.035) 0px,
+      rgba(255,255,255,0.035) 1px,
+      transparent 2px,
+      transparent 3px
+    );
+    mix-blend-mode:overlay;
+  }
+  .vignette{
+    pointer-events:none;
+    position:fixed; inset:0; z-index:9998;
+    box-shadow: inset 0 0 18vw rgba(0,0,0,.85);
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; scroll-behavior:auto !important;}
+  }
+
+  a{color:inherit; text-decoration:none;}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:.72rem;
+    letter-spacing:.3em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:0 28px;}
+
+  /* ---------- NAV ---------- */
+  header{
+    position:fixed; top:0; left:0; right:0; z-index:500;
+    background:linear-gradient(to bottom, rgba(5,5,8,.92), rgba(5,5,8,.55));
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);
+  }
+  nav{
+    display:flex; align-items:center; justify-content:space-between;
+    max-width:1180px; margin:0 auto; padding:16px 28px;
+  }
+  .logo{
+    font-family:var(--mono);
+    font-weight:700;
+    font-size:1.05rem;
+    letter-spacing:.12em;
+    display:flex; align-items:center; gap:10px;
+  }
+  .logo .dot{width:9px;height:9px; background:var(--crimson); box-shadow:0 0 10px var(--crimson); display:inline-block;}
+  .navlinks{display:flex; gap:30px; font-size:.86rem; letter-spacing:.08em; text-transform:uppercase;}
+  .navlinks a{color:var(--muted); position:relative; padding-bottom:4px; transition:color .2s;}
+  .navlinks a:hover, .navlinks a:focus-visible{color:var(--azure);}
+  .navlinks a::after{
+    content:''; position:absolute; left:0; bottom:0; width:0; height:1px; background:var(--azure);
+    transition:width .25s;
+  }
+  .navlinks a:hover::after{width:100%;}
+  .nav-cta{
+    font-family:var(--mono); font-size:.75rem; letter-spacing:.1em;
+    border:1px solid var(--crimson); color:var(--crimson); padding:8px 16px;
+    text-transform:uppercase; transition:.2s;
+  }
+  .nav-cta:hover{background:var(--crimson); color:#050505; box-shadow:0 0 20px rgba(255,36,68,.6);}
+
+  /* ---------- RANK METER (signature element) ---------- */
+  .rankbar{
+    position:fixed; top:57px; left:0; right:0; z-index:490;
+    height:34px;
+    background:#050507;
+    border-bottom:1px solid var(--line);
+    display:flex; align-items:center;
+    font-family:var(--mono); font-size:.68rem; letter-spacing:.15em;
+  }
+  .rankbar-track{
+    position:relative; flex:1; height:100%; display:flex;
+  }
+  .rankbar-seg{
+    flex:1; display:flex; align-items:center; justify-content:center;
+    color:var(--muted); border-right:1px solid var(--line);
+    position:relative; text-transform:uppercase; transition:color .25s;
+  }
+  .rankbar-seg.active{color:#050507; font-weight:700;}
+  .rankbar-fill{
+    position:absolute; inset:0; width:0%; z-index:0;
+    background:linear-gradient(90deg, var(--crimson), var(--azure), var(--violet), var(--solar));
+    transition:width .12s linear;
+  }
+  .rankbar-seg span{position:relative; z-index:1;}
+  .rankbar-label{padding:0 16px; color:var(--muted); white-space:nowrap; border-right:1px solid var(--line); height:100%; display:flex; align-items:center;}
+
+  /* ---------- HERO ---------- */
+  .hero{
+    position:relative;
+    min-height:100vh;
+    display:flex; align-items:center;
+    padding:150px 0 80px;
+    overflow:hidden;
+    background:
+      radial-gradient(ellipse at 75% 20%, rgba(255,36,68,.18), transparent 55%),
+      radial-gradient(ellipse at 15% 80%, rgba(34,228,255,.14), transparent 55%),
+      var(--bg);
+  }
+  .hero-grid{
+    position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(255,36,68,.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,36,68,.06) 1px, transparent 1px);
+    background-size:46px 46px;
+    mask-image:linear-gradient(to bottom, rgba(0,0,0,.9), transparent 80%);
+    z-index:0;
+  }
+  .hero-inner{
+    position:relative; z-index:2;
+    display:grid; grid-template-columns:1.15fr .85fr; gap:40px; align-items:center;
+    max-width:1180px; margin:0 auto; padding:0 28px; width:100%;
+  }
+  .hero h1{
+    font-size:clamp(3.4rem, 9vw, 6.4rem);
+    line-height:.92;
+    font-weight:700;
+    letter-spacing:-.01em;
+    text-transform:uppercase;
+    color:#fff;
+    position:relative;
+  }
+  .hero h1 .glitch{
+    display:block;
+    position:relative;
+    color:var(--crimson);
+    text-shadow: 0 0 24px rgba(255,36,68,.55);
+  }
+  .hero h1 .glitch::before, .hero h1 .glitch::after{
+    content:'ULTRAPARKOUR'; position:absolute; left:0; top:0; width:100%;
+    overflow:hidden; clip-path: inset(0 0 0 0);
+  }
+  .hero h1 .glitch::before{color:var(--azure); animation:glitch1 3.4s infinite linear; z-index:-1;}
+  .hero h1 .glitch::after{color:var(--violet); animation:glitch2 2.6s infinite linear; z-index:-1;}
+  @keyframes glitch1{
+    0%,92%,100%{clip-path:inset(0 0 100% 0); transform:translate(0,0);}
+    93%{clip-path:inset(10% 0 60% 0); transform:translate(-3px,1px);}
+    95%{clip-path:inset(60% 0 5% 0); transform:translate(3px,-1px);}
+    97%{clip-path:inset(30% 0 40% 0); transform:translate(-2px,0);}
+  }
+  @keyframes glitch2{
+    0%,90%,100%{clip-path:inset(0 0 100% 0); transform:translate(0,0);}
+    91%{clip-path:inset(70% 0 5% 0); transform:translate(3px,0);}
+    94%{clip-path:inset(20% 0 65% 0); transform:translate(-3px,1px);}
+    96%{clip-path:inset(45% 0 20% 0); transform:translate(2px,-1px);}
+  }
+  .hero-sub{
+    margin-top:22px; max-width:46ch; color:var(--muted); font-size:1.08rem; line-height:1.6;
+  }
+  .hero-sub b{color:var(--text); font-weight:600;}
+  .hero-ctas{display:flex; gap:16px; margin-top:34px; flex-wrap:wrap;}
+  .btn{
+    font-family:var(--mono); font-size:.82rem; letter-spacing:.1em; text-transform:uppercase;
+    padding:15px 28px; border:1px solid transparent; display:inline-flex; align-items:center; gap:10px;
+    transition:.2s;
+  }
+  .btn-primary{background:var(--crimson); color:#07070a; font-weight:700; box-shadow:0 0 26px rgba(255,36,68,.45);}
+  .btn-primary:hover{background:#fff; box-shadow:0 0 34px rgba(255,255,255,.5);}
+  .btn-ghost{border-color:var(--azure); color:var(--azure);}
+  .btn-ghost:hover{background:var(--azure); color:#07070a; box-shadow:0 0 26px rgba(34,228,255,.45);}
+  .hero-meta{display:flex; gap:26px; margin-top:38px; font-family:var(--mono); font-size:.72rem; color:var(--muted); letter-spacing:.08em;}
+  .hero-meta span b{display:block; color:var(--text); font-size:1rem; font-family:var(--disp); font-weight:700;}
+
+  /* V1 css portrait */
+  .v1-wrap{position:relative; display:flex; justify-content:center; align-items:center; height:440px;}
+  .v1-frame{
+    position:absolute; inset:0; border:1px solid var(--line);
+    background:repeating-linear-gradient(135deg, rgba(255,255,255,.02) 0 2px, transparent 2px 10px);
+  }
+  .v1-frame::before{
+    content:'V1 // NOMAD-CLASS ROBOT'; position:absolute; top:10px; left:12px;
+    font-family:var(--mono); font-size:.62rem; letter-spacing:.15em; color:var(--muted);
+  }
+  .v1-frame::after{
+    content:'STATUS: MERCILESS'; position:absolute; bottom:10px; right:12px;
+    font-family:var(--mono); font-size:.62rem; letter-spacing:.15em; color:var(--crimson);
+  }
+  .v1-img{
+    position:relative; z-index:2; max-width:70%; max-height:80%;
+    filter:drop-shadow(0 0 30px rgba(255,36,68,.35));
+  }
+
+  /* ---------- SECTION SHELL ---------- */
+  section{padding:110px 0; position:relative;}
+  .section-head{max-width:640px; margin-bottom:56px;}
+  .section-head h2{
+    font-size:clamp(2rem,4vw,3rem); text-transform:uppercase; font-weight:700; margin-top:10px; color:#fff;
+  }
+  .section-head p{color:var(--muted); margin-top:14px; line-height:1.65; font-size:1.02rem;}
+  .accent-red{color:var(--crimson);}
+  .accent-azure{color:var(--azure);}
+  .accent-violet{color:var(--violet);}
+  .accent-toxic{color:var(--toxic);}
+  .accent-solar{color:var(--solar);}
+
+  /* ---------- CONCEPT ---------- */
+  .concept{background:var(--bg-raised); border-top:1px solid var(--line); border-bottom:1px solid var(--line);}
+  .concept-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border:1px solid var(--line);}
+  .concept-cell{background:var(--bg-card); padding:34px 28px;}
+  .concept-cell .n{font-family:var(--mono); color:var(--crimson); font-size:.72rem; letter-spacing:.2em;}
+  .concept-cell h3{font-size:1.3rem; margin:12px 0 10px; text-transform:uppercase; font-weight:700;}
+  .concept-cell p{color:var(--muted); font-size:.94rem; line-height:1.6;}
+  .rank-chain{
+    margin-top:56px; display:flex; align-items:center; flex-wrap:wrap; gap:0; font-family:var(--mono);
+  }
+  .rank-chain .step{
+    padding:10px 20px; border:1px solid var(--line); font-size:.78rem; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--muted);
+  }
+  .rank-chain .step.s1{border-color:var(--crimson); color:var(--crimson);}
+  .rank-chain .step.s2{border-color:var(--azure); color:var(--azure);}
+  .rank-chain .step.s3{border-color:var(--violet); color:var(--violet);}
+  .rank-chain .step.s4{border-color:var(--solar); color:var(--solar); font-weight:700;}
+  .rank-chain .arrow{color:var(--muted); padding:0 10px;}
+
+  /* ---------- FEATURE CARDS ---------- */
+  .feature-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:22px;}
+  .fcard{
+    background:var(--bg-card); border:1px solid var(--line); padding:30px 26px;
+    transition:transform .2s, border-color .2s, box-shadow .2s;
+    position:relative; overflow:hidden;
+  }
+  .fcard::before{
+    content:''; position:absolute; top:0; left:0; width:100%; height:2px;
+    background:var(--fcolor,var(--crimson));
+  }
+  .fcard:hover{transform:translateY(-4px); border-color:var(--fcolor,var(--crimson)); box-shadow:0 12px 30px -12px rgba(0,0,0,.6);}
+  .fcard .ico{font-family:var(--mono); font-size:.7rem; letter-spacing:.2em; color:var(--fcolor,var(--crimson));}
+  .fcard h3{font-size:1.18rem; margin:14px 0 10px; text-transform:uppercase; font-weight:700;}
+  .fcard p{color:var(--muted); font-size:.92rem; line-height:1.6;}
+
+  /* ---------- SECTORS ---------- */
+  .sector-strip{display:grid; grid-template-columns:repeat(5,1fr); gap:14px;}
+  .sector{
+    position:relative; padding:26px 20px 90px; min-height:280px;
+    background:var(--bg-card); border:1px solid var(--line);
+    overflow:hidden;
+  }
+  .sector::before{
+    content:''; position:absolute; inset:0; opacity:.16;
+    background:
+      repeating-linear-gradient(0deg, var(--scolor) 0 2px, transparent 2px 22px),
+      repeating-linear-gradient(90deg, var(--scolor) 0 2px, transparent 2px 22px);
+  }
+  .sector .tag{font-family:var(--mono); font-size:.62rem; letter-spacing:.2em; color:var(--muted); position:relative;}
+  .sector h3{
+    font-size:1.5rem; font-weight:700; text-transform:uppercase; margin-top:8px; color:var(--scolor); position:relative;
+    text-shadow:0 0 18px color-mix(in srgb, var(--scolor) 60%, transparent);
+  }
+  .sector p{color:var(--muted); font-size:.86rem; margin-top:12px; line-height:1.55; position:relative;}
+  .sector .idx{
+    position:absolute; bottom:14px; right:16px; font-family:var(--mono); font-size:2.4rem; font-weight:700;
+    color:var(--scolor); opacity:.18;
+  }
+  .s-crimson{--scolor:var(--crimson);}
+  .s-azure{--scolor:var(--azure);}
+  .s-violet{--scolor:var(--violet);}
+  .s-toxic{--scolor:var(--toxic);}
+  .s-solar{--scolor:var(--solar);}
+
+  /* ---------- BOSSES ---------- */
+  .boss-list{display:flex; flex-direction:column; gap:1px; background:var(--line); border:1px solid var(--line);}
+  .boss{
+    background:var(--bg-card); display:grid; grid-template-columns:90px 1fr auto; gap:26px; align-items:center;
+    padding:26px 30px;
+  }
+  .boss .bno{font-family:var(--mono); font-size:2.2rem; color:var(--muted); font-weight:700;}
+  .boss h3{font-size:1.4rem; text-transform:uppercase; font-weight:700;}
+  .boss .btitle{font-family:var(--mono); font-size:.68rem; letter-spacing:.15em; color:var(--bcolor); text-transform:uppercase;}
+  .boss p{color:var(--muted); font-size:.9rem; margin-top:8px; line-height:1.55;}
+  .unlock{
+    font-family:var(--mono); font-size:.72rem; letter-spacing:.1em; text-transform:uppercase;
+    border:1px solid var(--bcolor); color:var(--bcolor); padding:9px 16px; white-space:nowrap;
+  }
+  .b1{--bcolor:var(--azure);} .b2{--bcolor:var(--violet);} .b3{--bcolor:var(--crimson);}
+
+  /* ---------- WEAPONS / PARRY ---------- */
+  .split{display:grid; grid-template-columns:1fr 1fr; gap:60px; align-items:start;}
+  .weapon-list{display:flex; flex-direction:column; gap:1px; background:var(--line); border:1px solid var(--line);}
+  .weapon{background:var(--bg-card); padding:20px 24px; display:flex; justify-content:space-between; align-items:center; gap:16px;}
+  .weapon .wname{font-weight:700; text-transform:uppercase; font-size:1.05rem;}
+  .weapon .wdesc{color:var(--muted); font-size:.85rem; margin-top:4px;}
+  .weapon .wtag{font-family:var(--mono); font-size:.64rem; letter-spacing:.15em; color:var(--azure);}
+  .parry-box{
+    border:1px solid var(--crimson); background:linear-gradient(160deg, rgba(255,36,68,.08), transparent 60%);
+    padding:34px 30px;
+  }
+  .parry-box .eyebrow{color:var(--crimson);}
+  .parry-box h3{font-size:1.6rem; text-transform:uppercase; font-weight:700; margin:10px 0 14px;}
+  .parry-box p{color:var(--muted); line-height:1.65; font-size:.96rem;}
+  .parry-box .key{
+    display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px;
+    border:1px solid var(--crimson); color:var(--crimson); font-family:var(--mono); margin:0 4px; font-size:.85rem;
+  }
+
+  /* ---------- CYBERGRIND ---------- */
+  .cybergrind{
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(198,255,46,.12), transparent 60%),
+      var(--bg-raised);
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+    text-align:center;
+  }
+  .cybergrind h2{font-size:clamp(2.2rem,5vw,3.6rem);}
+  .cg-stats{display:flex; justify-content:center; gap:60px; margin-top:44px; flex-wrap:wrap;}
+  .cg-stats div{font-family:var(--mono);}
+  .cg-stats b{display:block; font-family:var(--disp); font-size:2.2rem; color:var(--toxic); font-weight:700;}
+  .cg-stats span{color:var(--muted); font-size:.7rem; letter-spacing:.15em; text-transform:uppercase;}
+
+  /* ---------- MULTIPLAYER ---------- */
+  .mp-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:20px;}
+  .mp-card{background:var(--bg-card); border:1px solid var(--line); padding:30px; position:relative;}
+  .mp-card h3{font-size:1.25rem; text-transform:uppercase; font-weight:700; margin-bottom:10px;}
+  .mp-card p{color:var(--muted); font-size:.92rem; line-height:1.6;}
+  .mp-card ul{margin-top:14px; padding-left:0; list-style:none;}
+  .mp-card li{color:var(--muted); font-size:.87rem; padding:6px 0 6px 20px; position:relative; border-top:1px solid var(--line);}
+  .mp-card li:first-child{border-top:none;}
+  .mp-card li::before{content:'▸'; position:absolute; left:0; color:var(--azure);}
+
+  /* ---------- GALLERY ---------- */
+  .gallery{display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+  .shot{
+    aspect-ratio:16/10; background:
+      repeating-linear-gradient(45deg, rgba(255,255,255,.03) 0 10px, transparent 10px 20px), var(--bg-card);
+    border:1px dashed var(--line);
+    display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px;
+  }
+  .shot span{font-family:var(--mono); font-size:.7rem; letter-spacing:.15em; color:var(--muted); text-transform:uppercase;}
+  .shot .ph-icon{font-size:1.6rem; color:var(--muted); opacity:.5;}
+  .shot.big{grid-column:span 2;}
+  .shot img{width:100%; height:100%; object-fit:cover; display:block;}
+
+  /* ---------- DOWNLOAD CTA ---------- */
+  .download{
+    text-align:center; background:
+      radial-gradient(ellipse at 50% 100%, rgba(255,36,68,.18), transparent 60%), var(--bg);
+    border-top:1px solid var(--line);
+  }
+  .download h2{font-size:clamp(2.4rem,6vw,4.4rem); text-transform:uppercase; font-weight:700;}
+  .download p{color:var(--muted); margin:18px auto 36px; max-width:50ch; line-height:1.6;}
+  .download .btn-primary{padding:19px 40px; font-size:.9rem;}
+  .dl-note{margin-top:18px; font-family:var(--mono); font-size:.7rem; color:var(--muted); letter-spacing:.1em;}
+
+  /* ---------- FOOTER ---------- */
+  footer{border-top:1px solid var(--line); padding:50px 0 40px; background:var(--bg-raised);}
+  .foot-inner{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:24px;}
+  .foot-social{display:flex; gap:14px;}
+  .foot-social a{
+    font-family:var(--mono); font-size:.74rem; letter-spacing:.08em; text-transform:uppercase;
+    border:1px solid var(--line); padding:9px 16px; color:var(--muted); transition:.2s;
+  }
+  .foot-social a:hover{border-color:var(--azure); color:var(--azure); box-shadow:0 0 16px rgba(34,228,255,.3);}
+  .foot-copy{font-family:var(--mono); font-size:.7rem; color:var(--muted); letter-spacing:.05em;}
+
+  /* ---------- RESPONSIVE ---------- */
+  @media (max-width:920px){
+    .hero-inner{grid-template-columns:1fr;}
+    .v1-wrap{height:300px; order:-1;}
+    .concept-grid{grid-template-columns:1fr;}
+    .feature-grid{grid-template-columns:1fr 1fr;}
+    .sector-strip{grid-template-columns:repeat(2,1fr);}
+    .split{grid-template-columns:1fr;}
+    .mp-grid{grid-template-columns:1fr;}
+    .gallery{grid-template-columns:1fr 1fr;}
+    .shot.big{grid-column:span 2;}
+    .boss{grid-template-columns:1fr; text-align:left;}
+    .navlinks{display:none;}
+    .rankbar-label{display:none;}
+  }
+  @media (max-width:560px){
+    .feature-grid{grid-template-columns:1fr;}
+    .sector-strip{grid-template-columns:1fr;}
+    .gallery{grid-template-columns:1fr;}
+    .shot.big{grid-column:span 1;}
+    .cg-stats{gap:30px;}
+  }
+
+  :focus-visible{outline:2px solid var(--azure); outline-offset:2px;}
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<header>
+  <nav>
+    <div class="logo"><span class="dot"></span>ULTRAPARKOUR</div>
+    <div class="navlinks">
+      <a href="#konsept">Konsept</a>
+      <a href="#sektorler">Sektörler</a>
+      <a href="#boss">Boss</a>
+      <a href="#silahlar">Silahlar</a>
+      <a href="#multiplayer">Multiplayer</a>
+    </div>
+    <a class="nav-cta" href="https://github.com/hosmerim/ULTRAPARKOUR/releases/download/v12/ULTRAPARKOURexev12.zip" target="_blank" rel="noopener">İndir</a>
+  </nav>
+</header>
+
+<div class="rankbar" id="rankbar">
+  <div class="rankbar-label">STİL RÜTBESİ</div>
+  <div class="rankbar-track">
+    <div class="rankbar-fill" id="rankfill"></div>
+    <div class="rankbar-seg" id="seg1"><span>STYLISH</span></div>
+    <div class="rankbar-seg" id="seg2"><span>DESTRUCTIVE</span></div>
+    <div class="rankbar-seg" id="seg3"><span>RESPLENDENT</span></div>
+    <div class="rankbar-seg" id="seg4"><span>ULTRAKILL</span></div>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero" id="top">
+  <div class="hero-grid"></div>
+  <div class="hero-inner">
+    <div>
+      <div class="eyebrow">PYTHON // PYGAME — HIZLI TEMPOLU PARKUR-NİŞANCI</div>
+      <h1>
+        <span class="glitch">ULTRAPARKOUR</span>
+      </h1>
+      <p class="hero-sub">
+        ULTRAKILL'den ilham alan bu 2D parkur-nişancıda hayatta kalmak yetmez — <b>stil için öldürürsün</b>.
+        Platformlar arasında çift zıplayarak süz, mermileri parry'le geri çevir, rütbeni yükselt:
+        STYLISH'ten ULTRAKILL'e.
+      </p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="https://github.com/hosmerim/ULTRAPARKOUR/releases/download/v12/ULTRAPARKOURexev12.zip" target="_blank" rel="noopener">▶ Şimdi İndir</a>
+        <a class="btn btn-ghost" href="https://github.com/hosmerim" target="_blank" rel="noopener">GitHub'da İncele</a>
+      </div>
+      <div class="hero-meta">
+        <span><b>30</b>Bölüm</span>
+        <span><b>5</b>Sektör</span>
+        <span><b>3</b>Boss</span>
+        <span><b>3</b>Silah</span>
+        <span><b>∞</b>Cybergrind</span>
+      </div>
+    </div>
+    <div class="v1-wrap">
+      <div class="v1-frame"></div>
+      <img class="v1-img" src="karakter1.png" alt="V1 karakteri">
+    </div>
+  </div>
+</section>
+
+<!-- KONSEPT -->
+<section class="concept" id="konsept">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow accent-red">OYUN KONSEPTİ</div>
+      <h2>Zıpla, Ateş Et, <span class="accent-red">Stil Kazan</span></h2>
+      <p>V1'i kontrol ediyorsun: platformlar arasında çift zıplamayla süzülen, aynı anda düşmanlara ateş açan bir savaş robotu. Hedef sadece bölümü bitirmek değil — bunu olabildiğince acımasız ve akıcı yaparak stil puanı biriktirmek.</p>
+    </div>
+    <div class="concept-grid">
+      <div class="concept-cell">
+        <div class="n">01 — HAREKET</div>
+        <h3>Çift Zıplama</h3>
+        <p>Platformlar arasında momentum kaybetmeden süzül. Havadayken bile ateş kesilmez, hareket asla durmaz.</p>
+      </div>
+      <div class="concept-cell">
+        <div class="n">02 — ÇATIŞMA</div>
+        <h3>Kesintisiz Ateş</h3>
+        <p>Zıplarken, düşerken, platformdan platforma geçerken — nişan almayı bırakmazsın. Duraksama, ölümdür.</p>
+      </div>
+      <div class="concept-cell">
+        <div class="n">03 — ÖDÜL</div>
+        <h3>Stil Puanı</h3>
+        <p>Hayatta kalmak minimum gereksinim. Gerçek amaç, art arda vuruşlar ve parry'lerle rütbeni yükseltmek.</p>
+      </div>
+    </div>
+    <div class="rank-chain">
+      <div class="step s1">STYLISH</div><div class="arrow">→</div>
+      <div class="step s2">DESTRUCTIVE</div><div class="arrow">→</div>
+      <div class="step s3">RESPLENDENT</div><div class="arrow">→</div>
+      <div class="step s4">ULTRAKILL</div>
+    </div>
+  </div>
+</section>
+
+<!-- ÖZELLİKLER -->
+<section id="ozellikler">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow accent-azure">ANA ÖZELLİKLER</div>
+      <h2>Her Bölüm Bir Meydan Okuma</h2>
+      <p>30 bölümlük bir kampanya, üç acımasız boss, parry mekaniği ve sonsuz bir hayatta kalma modu — hepsi tek bir hızlı tempolu pakette.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="fcard" style="--fcolor:var(--crimson)">
+        <div class="ico">01</div>
+        <h3>30 Bölümlük Kampanya</h3>
+        <p>Her biri kendi renk paletine ve platform düzenine sahip 5 farklı sektöre yayılan otuz el yapımı bölüm.</p>
+      </div>
+      <div class="fcard" style="--fcolor:var(--azure)">
+        <div class="ico">02</div>
+        <h3>3 Boss Dövüşü</h3>
+        <p>Gabriel, Swordsmachine ve Minos Prime. Her biri düşürüldüğünde yeni bir silahın kilidini açar.</p>
+      </div>
+      <div class="fcard" style="--fcolor:var(--violet)">
+        <div class="ico">03</div>
+        <h3>Parry Sistemi</h3>
+        <p>Doğru zamanlanmış bir tuşla düşman mermilerini geri çevir ve kaynağına yönelt.</p>
+      </div>
+      <div class="fcard" style="--fcolor:var(--toxic)">
+        <div class="ico">04</div>
+        <h3>Cybergrind Modu</h3>
+        <p>Sonsuz hayatta kalma. Düşman dalgaları geldikçe zorluk katlanarak artar.</p>
+      </div>
+      <div class="fcard" style="--fcolor:var(--solar)">
+        <div class="ico">05</div>
+        <h3>Çok Oyunculu</h3>
+        <p>Aynı Wi-Fi ağında ya da internet üzerinden — düello ve futbol modlarında arkadaşlarınla karşı karşıya gel.</p>
+      </div>
+      <div class="fcard" style="--fcolor:var(--crimson)">
+        <div class="ico">06</div>
+        <h3>Lobi Sistemi</h3>
+        <p>Oda kur veya ara, şifreli/şifresiz odalar oluştur, kendi kullanıcı adı profilinle oyna.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SEKTÖRLER -->
+<section id="sektorler">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow accent-violet">BEŞ SEKTÖR</div>
+      <h2>Her Sektörün Kendi Kimliği Var</h2>
+      <p>Kampanya beş temalı sektöre bölünmüştür. Her biri kendine özgü renk paleti, platform düzeni ve atmosferle gelir.</p>
+    </div>
+    <div class="sector-strip">
+      <div class="sector s-crimson">
+        <div class="tag">SEKTÖR 01</div>
+        <h3>Crimson</h3>
+        <p>Kızıl neon ışıklarla yıkanmış dar geçitler. Kampanyanın açılış vahşeti.</p>
+        <div class="idx">I</div>
+      </div>
+      <div class="sector s-azure">
+        <div class="tag">SEKTÖR 02</div>
+        <h3>Azure</h3>
+        <p>Soğuk turkuaz ışıkla aydınlanan geniş, açık platform ağları.</p>
+        <div class="idx">II</div>
+      </div>
+      <div class="sector s-violet">
+        <div class="tag">SEKTÖR 03</div>
+        <h3>Violet</h3>
+        <p>Mor gölgeler içinde labirentimsi, dikey ağırlıklı bir düzen.</p>
+        <div class="idx">III</div>
+      </div>
+      <div class="sector s-toxic">
+        <div class="tag">SEKTÖR 04</div>
+        <h3>Toxic</h3>
+        <p>Asitle aşınmış zemin ve zehirli-yeşil vurgularla dolu tehlikeli araziler.</p>
+        <div class="idx">IV</div>
+      </div>
+      <div class="sector s-solar">
+        <div class="tag">SEKTÖR 05</div>
+        <h3>Solar</h3>
+        <p>Kavurucu sarı ışıkla parlayan, kampanyanın son ve en amansız sektörü.</p>
+        <div class="idx">V</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BOSSLAR -->
+<section id="boss">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow accent-azure">BOSS DÖVÜŞLERİ</div>
+      <h2>Üç Düşman, Üç Yeni Silah</h2>
+      <p>Her boss dövüşü kendi mekaniklerini dayatır. Her birini yendiğinde cephaneliğine yeni bir silah eklenir.</p>
+    </div>
+    <div class="boss-list">
+      <div class="boss b1">
+        <div class="bno">01</div>
+        <div>
+          <div class="btitle">İlk Sınav</div>
+          <h3>Gabriel</h3>
+          <p>Hızlı, agresif ve affetmeyen bir açılış dövüşü — refleksleri ve parry zamanlamasını test eder.</p>
+        </div>
+        <div class="unlock">Kilit Açılan: Taramalı</div>
+      </div>
+      <div class="boss b2">
+        <div class="bno">02</div>
+        <div>
+          <div class="btitle">Çelik Duvar</div>
+          <h3>Swordsmachine</h3>
+          <p>Yakın mesafe baskısı yüksek, mekanik ve tahmin edilemez bir rakip.</p>
+        </div>
+        <div class="unlock">Kilit Açılan: Pompalı</div>
+      </div>
+      <div class="boss b3">
+        <div class="bno">03</div>
+        <div>
+          <div class="btitle">Son Yargı</div>
+          <h3>Minos Prime</h3>
+          <p>Kampanyanın doruk noktası. Tam anlamıyla hakim olmuş bir V1 gerektirir.</p>
+        </div>
+        <div class="unlock">Kilit Açılan: ULTRAKILL Rütbesi</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SİLAHLAR & PARRY -->
+<section id="silahlar">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow accent-red">SİLAHLAR & PARRY</div>
+      <h2>Cephanelik ve Refleks</h2>
+    </div>
+    <div class="split">
+      <div>
+        <div class="weapon-list">
+          <div class="weapon">
+            <div>
+              <div class="wname">Tabanca</div>
+              <div class="wdesc">Sınırsız cephane, hızlı ateş oranı. Başlangıç silahın, her zaman güvenilir.</div>
+            </div>
+            <div class="wtag">BAŞLANGIÇ</div>
+          </div>
+          <div class="weapon">
+            <div>
+              <div class="wname">Taramalı</div>
+              <div class="wdesc">Yüksek atış hızı, orta menzil. Sürekli baskı için idealdir.</div>
+            </div>
+            <div class="wtag">GABRIEL'İ YEN</div>
+          </div>
+          <div class="weapon">
+            <div>
+              <div class="wname">Pompalı</div>
+              <div class="wdesc">Yakın mesafede yıkıcı hasar. Kalabalık düşman gruplarını dağıtır.</div>
+            </div>
+            <div class="wtag">SWORDSMACHINE'İ YEN</div>
+          </div>
+        </div>
+      </div>
+      <div class="parry-box">
+        <div class="eyebrow">MEKANİK</div>
+        <h3>Parry Sistemi</h3>
+        <p>
+          Doğru anda <span class="key">F</span> tuşuna basarak gelen bir mermiyi geri çevir ve
+          onu ateş eden düşmana geri gönder. Mükemmel zamanlama hem seni korur hem de
+          stil puanını katlar — savunma, en agresif silahına dönüşür.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CYBERGRIND -->
+<section class="cybergrind">
+  <div class="wrap">
+    <div class="eyebrow accent-toxic">SINIRSIZ MOD</div>
+    <h2>CYBERGRIND</h2>
+    <p style="color:var(--muted); max-width:52ch; margin:16px auto 0; line-height:1.6;">
+      Kampanya bittiğinde asıl sınav başlar. Sonsuz hayatta kalma arenasında düşman dalgaları
+      art arda gelir, zorluk aralıksız tırmanır. Ne kadar dayanabilirsin?
+    </p>
+    <div class="cg-stats">
+      <div><b>∞</b><span>Dalga Sayısı</span></div>
+      <div><b>↑</b><span>Artan Zorluk</span></div>
+      <div><b>★</b><span>Skor Tablosu</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- MULTIPLAYER -->
+<section id="multiplayer">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow accent-solar">ÇOK OYUNCULU</div>
+      <h2>Yalnız Değilsin</h2>
+      <p>Aynı Wi-Fi ağında ya da internet üzerinden — arkadaşlarınla düello et, top oyna, lobide buluş.</p>
+    </div>
+    <div class="mp-grid">
+      <div class="mp-card">
+        <h3 class="accent-red">Düello Modu</h3>
+        <p>1v1 doğrudan çatışma. Parry'lerle mermileri geri çevir, power-up'ları topla, son ayakta kalan kazanır.</p>
+        <ul>
+          <li>Silahlı 1v1 çatışma</li>
+          <li>Parry ile karşı saldırı</li>
+          <li>Harita üzerinde power-up'lar</li>
+        </ul>
+      </div>
+      <div class="mp-card">
+        <h3 class="accent-azure">Futbol Modu</h3>
+        <p>Fizik tabanlı, 2 kişilik bir top oyunu. Her maç rastgele üretilen bir sahada oynanır.</p>
+        <ul>
+          <li>Topu taşı ve fırlat</li>
+          <li>Rastgele üretilen sahalar</li>
+          <li>Kaleye gol atarak kazan</li>
+        </ul>
+      </div>
+      <div class="mp-card">
+        <h3 class="accent-violet">Lobi Sistemi</h3>
+        <p>Kendi odanı kur ya da açık odaları ara. Şifreli veya şifresiz — kontrol sende.</p>
+        <ul>
+          <li>Oda kurma ve arama</li>
+          <li>Şifreli/şifresiz odalar</li>
+          <li>Kişisel kullanıcı adı profili</li>
+        </ul>
+      </div>
+      <div class="mp-card">
+        <h3 class="accent-toxic">Bağlantı</h3>
+        <p>Aynı ağdaki arkadaşlarınla LAN üzerinden anında oyna, ya da internet üzerinden dünyanın herhangi bir yerinden bağlan.</p>
+        <ul>
+          <li>Yerel ağ (LAN) desteği</li>
+          <li>İnternet üzerinden çevrimiçi oyun</li>
+          <li>Düşük gecikmeli eşleşme</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- GALLERY -->
+<section id="galeri">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow accent-azure">GÖRÜNTÜLER</div>
+      <h2>Sahadan Görüntüler</h2>
+      <p>Geliştirme sürüyor — ekran görüntüleri ve oynanış GIF'leri yakında burada.</p>
+    </div>
+    <div class="gallery">
+      <div class="shot big"><img src="oynanis.gif" alt="ULTRAPARKOUR oynanış GIF'i" loading="lazy"></div>
+      <div class="shot"><img src="oyun1.jpg" alt="ULTRAPARKOUR ekran görüntüsü 1" loading="lazy"></div>
+      <div class="shot"><img src="oyun2.jpg" alt="ULTRAPARKOUR ekran görüntüsü 2" loading="lazy"></div>
+      <div class="shot big"><img src="oyun3.jpg" alt="ULTRAPARKOUR ekran görüntüsü 3" loading="lazy"></div>
+    </div>
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section class="download" id="indir">
+  <div class="wrap">
+    <div class="eyebrow accent-red">ŞİMDİ OYNA</div>
+    <h2>Rütbeni Kazan</h2>
+    <p>ULTRAPARKOUR açık kaynak ve geliştirilmeye devam ediyor. Kaynak koduna GitHub üzerinden ulaş, projeyi takip et.</p>
+    <a class="btn btn-primary" href="https://github.com/hosmerim/ULTRAPARKOUR/releases/download/v12/ULTRAPARKOURexev12.zip" target="_blank" rel="noopener">⬇ Oyunu İndir (v12)</a>
+    <div class="dl-note">PYTHON 3 // PYGAME GEREKTİRİR</div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-inner">
+    <div class="foot-copy">ULTRAPARKOUR — Bağımsız olarak geliştiriliyor. ULTRAKILL'e saygıyla ilham alınmıştır.</div>
+    <div class="foot-social">
+      <a href="https://github.com/hosmerim" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://youtube.com/@HosmerimBasar" target="_blank" rel="noopener">YouTube</a>
+      <a href="https://instagram.com/hosmerimbasar" target="_blank" rel="noopener">Instagram</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Signature element: style-rank meter fills with scroll progress and highlights the active rank.
+  const fill = document.getElementById('rankfill');
+  const segs = [
+    document.getElementById('seg1'),
+    document.getElementById('seg2'),
+    document.getElementById('seg3'),
+    document.getElementById('seg4'),
+  ];
+  function updateRank(){
+    const doc = document.documentElement;
+    const scrollTop = doc.scrollTop || document.body.scrollTop;
+    const scrollH = doc.scrollHeight - doc.clientHeight;
+    const progress = scrollH > 0 ? Math.min(1, Math.max(0, scrollTop / scrollH)) : 0;
+    fill.style.width = (progress * 100) + '%';
+    const stage = Math.min(3, Math.floor(progress * 4));
+    segs.forEach((s, i) => s.classList.toggle('active', i <= stage));
+  }
+  document.addEventListener('scroll', updateRank, {passive:true});
+  window.addEventListener('resize', updateRank);
+  updateRank();
+</script>
+
+</body>
+</html>
